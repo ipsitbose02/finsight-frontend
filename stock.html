@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinSight - Smarter Stock Tracking</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary: #00ffae;
+      --bg: #0e1117;
+      --card: #1c1f26;
+      --text: #e6e6e6;
+      --muted: #aaa;
+      --danger: #ff4c4c;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      padding: 40px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    header h1 {
+      font-size: 2.5rem;
+      color: var(--primary);
+    }
+
+    .tagline {
+      color: var(--muted);
+      margin-top: 5px;
+      font-size: 14px;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 30px;
+    }
+
+    input, select, button {
+      padding: 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+    }
+
+    input, select {
+      background: #2c2f36;
+      color: var(--text);
+    }
+
+    button {
+      background-color: var(--primary);
+      color: var(--bg);
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .layout {
+      display: flex;
+      flex-direction: row;
+      gap: 20px;
+    }
+
+    .left-section,
+    .right-section {
+      flex: 1;
+    }
+
+    .card {
+      background: var(--card);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0,255,174,0.1);
+      height: 100%;
+    }
+
+    #stock-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #2c2f36;
+    }
+
+    .stat:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      color: var(--muted);
+    }
+
+    .value.up {
+      color: var(--primary);
+    }
+
+    .value.down {
+      color: var(--danger);
+    }
+
+    canvas {
+      margin-top: 20px;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin-top: 15px;
+    }
+
+    li {
+      margin-bottom: 20px;
+      font-size: 1.2rem;
+      line-height: 1.6;
+    }
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    #error-message {
+      color: var(--danger);
+      text-align: center;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>📈 FinSight</h1>
+    <p class="tagline">Smarter Stock Tracking with Real-Time Charts and News</p>
+  </header>
+
+  <div class="controls">
+    <input type="text" id="symbol" placeholder="Enter Stock Symbol (e.g., AAPL)" />
+    <select id="interval">
+      <option value="5min">1 Hour</option>
+      <option value="15min">1 Day</option>
+      <option value="1day">1 Month</option>
+    </select>
+    <button onclick="getStockPrice()">Get Price</button>
+  </div>
+
+  <div class="layout">
+    <div class="left-section">
+      <div id="stock-info" class="card" style="display: none;">
+        <div class="stat"><span class="label">Symbol</span><span class="value" id="data-symbol"></span></div>
+        <div class="stat"><span class="label">Time</span><span class="value" id="data-time"></span></div>
+        <div class="stat"><span class="label">Price</span><span id="data-close" class="value"></span></div>
+        <div class="stat"><span class="label">Open</span><span class="value" id="data-open"></span></div>
+        <div class="stat"><span class="label">High</span><span class="value" id="data-high"></span></div>
+        <div class="stat"><span class="label">Low</span><span class="value" id="data-low"></span></div>
+        <div class="stat"><span class="label">Volume</span><span class="value" id="data-volume"></span></div>
+        <div class="stat"><span class="label">Change</span><span id="data-change" class="value"></span></div>
+        <canvas id="priceChart"></canvas>
+      </div>
+    </div>
+
+    <div class="right-section">
+      <div id="news-section" class="card" style="display: none;">
+        <h3>📰 Latest News</h3>
+        <ul id="news-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 📊 Performance Overview Section -->
+  <div id="performance-section" class="card" style="display: none; margin-top: 40px; width: 100%;">
+    <h2 style="text-align: center; margin-bottom: 20px; font-size: 24px;">📊 Performance Overview</h2>
+    <div id="performance-cards" style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;"></div>
+  </div>
+
+  <!-- 📋 Statistics Section -->
+  <div id="statistics-section" class="card" style="display: none; margin-top: 40px; width: 100%;">
+    <h2 style="text-align: center; margin-bottom: 20px; font-size: 24px;">📋 Statistics</h2>
+    <div id="statistics-list" style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: center;"></div>
+  </div>
+
+  <p id="error-message"></p>
+
+  <script>
+    let chart;
+
+    function getStockPrice() {
+      const symbol = document.getElementById("symbol").value.toUpperCase();
+      if (!symbol) return alert("Please enter a stock symbol.");
+
+      fetch(`https://finsight-f71i.onrender.com/api/stocks/${symbol}`)
+        .then(response => response.json())
+        .then(data => {
+          const open = parseFloat(data.open);
+          const close = parseFloat(data.close);
+          const change = close - open;
+          const changePercent = ((change / open) * 100).toFixed(2);
+          const movement = change >= 0 ? '▲' : '▼';
+          const changeClass = change >= 0 ? 'up' : 'down';
+
+          document.getElementById("data-symbol").innerText = data.symbol;
+          document.getElementById("data-time").innerText = data.time;
+          document.getElementById("data-close").innerText = `$${close.toFixed(2)} ${movement}`;
+          document.getElementById("data-close").className = `value ${changeClass}`;
+          document.getElementById("data-open").innerText = `$${open.toFixed(2)}`;
+          document.getElementById("data-high").innerText = `$${data.high}`;
+          document.getElementById("data-low").innerText = `$${data.low}`;
+          document.getElementById("data-volume").innerText = data.volume;
+          document.getElementById("data-change").innerHTML = `<span class="${changeClass}">${change.toFixed(2)} (${changePercent}%)</span>`;
+
+          document.getElementById("stock-info").style.display = "block";
+          document.getElementById("error-message").innerText = "";
+
+          drawChart(symbol);
+          fetchNews(symbol);
+          fetchPerformance(symbol);
+          fetchStatistics(symbol);
+        })
+        .catch(err => {
+          document.getElementById("stock-info").style.display = "none";
+          document.getElementById("news-section").style.display = "none";
+          document.getElementById("performance-section").style.display = "none";
+          document.getElementById("statistics-section").style.display = "none";
+          document.getElementById("error-message").innerText = "❌ Error fetching stock data.";
+          console.error(err);
+        });
+    }
+
+    function drawChart(symbol) {
+      const interval = document.getElementById("interval").value;
+      const outputSizes = { "5min": 12, "15min": 96, "1day": 30 };
+      const outputSize = outputSizes[interval] || 30;
+
+      fetch(`https://finsight-f71i.onrender.com/stocks/history/${symbol}/${interval}/${outputSize}`)
+        .then(response => response.json())
+        .then(history => {
+          const labels = history.map(entry => entry.datetime.split(" ")[1] || entry.datetime);
+          const prices = history.map(entry => parseFloat(entry.close));
+
+          const ctx = document.getElementById('priceChart').getContext('2d');
+          if (chart) chart.destroy();
+
+          chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels,
+              datasets: [{
+                label: `${symbol} Price`,
+                data: prices,
+                fill: false,
+                borderColor: '#00ffae',
+                tension: 0.2
+              }]
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { display: false }
+              },
+              scales: {
+                x: { display: true },
+                y: { display: true }
+              }
+            }
+          });
+        });
+    }
+
+    function fetchNews(symbol) {
+      fetch(`https://finsight-f71i.onrender.com/api/stocks/news/${symbol}`)
+        .then(response => response.json())
+        .then(news => {
+          const newsList = document.getElementById("news-list");
+          newsList.innerHTML = "";
+
+          if (!news || news.length === 0) {
+            newsList.innerHTML = "<li>No recent news found.</li>";
+            return;
+          }
+
+          news.slice(0, 10).forEach(article => {
+            const title = article.title || article.headline || "No title";
+            const url = article.url || article.link || "#";
+
+            const li = document.createElement("li");
+            li.innerHTML = `<a href="${url}" target="_blank">${title}</a>`;
+            newsList.appendChild(li);
+          });
+
+          document.getElementById("news-section").style.display = "block";
+        })
+        .catch(error => {
+          console.error("Error fetching news:", error);
+        });
+    }
+
+    function fetchPerformance(symbol) {
+      fetch(`https://finsight-f71i.onrender.com/api/stocks/performance/${symbol}`)
+        .then(response => response.json())
+        .then(perf => {
+          const container = document.getElementById("performance-cards");
+          container.innerHTML = "";
+
+          for (const [period, value] of Object.entries(perf)) {
+            const numeric = parseFloat(value);
+            const color = isNaN(numeric) ? "#aaa" : (numeric >= 0 ? "#00ffae" : "#ff4c4c");
+
+            const card = document.createElement("div");
+            card.style.flex = "1";
+            card.style.minWidth = "140px";
+            card.style.background = "#2c2f36";
+            card.style.padding = "15px";
+            card.style.borderRadius = "10px";
+            card.style.textAlign = "center";
+
+            card.innerHTML = `
+              <div style="font-size: 18px; color: #aaa; margin-bottom: 5px;">${period.toUpperCase()} Return</div>
+              <div style="font-size: 26px; font-weight: bold; color: ${color};">${isNaN(numeric) ? "N/A" : (numeric > 0 ? "+" : "") + value + "%"}</div>
+            `;
+            container.appendChild(card);
+          }
+
+          document.getElementById("performance-section").style.display = "block";
+        })
+        .catch(error => {
+          console.error("Error fetching performance:", error);
+          document.getElementById("performance-section").style.display = "none";
+        });
+    }
+
+    function formatNumber(value) {
+      if (!value || value === "Data not available") return "Data not available";
+      const num = parseFloat(value);
+      if (isNaN(num)) return value;
+
+      const abs = Math.abs(num);
+      if (abs >= 1e12) return (num / 1e12).toFixed(2) + "T";
+      if (abs >= 1e9) return (num / 1e9).toFixed(2) + "B";
+      if (abs >= 1e6) return (num / 1e6).toFixed(2) + "M";
+      if (abs >= 1e3) return (num / 1e3).toFixed(2) + "K";
+      return num.toFixed(2);
+    }
+
+    function fetchStatistics(symbol) {
+      fetch(`https://finsight-f71i.onrender.com/api/stocks/statistics/${symbol}`)
+        .then(response => response.json())
+        .then(stats => {
+          const container = document.getElementById("statistics-list");
+          container.innerHTML = "";
+
+          for (const [key, value] of Object.entries(stats)) {
+            const formattedValue = value === "Data not available"
+              ? `<span style="color:#888">Data not available</span>`
+              : formatNumber(value);
+
+            const card = document.createElement("div");
+            card.style.flex = "1";
+            card.style.minWidth = "180px";
+            card.style.background = "#2c2f36";
+            card.style.padding = "15px";
+            card.style.borderRadius = "10px";
+            card.style.textAlign = "center";
+            card.style.color = "#e6e6e6";
+
+            card.innerHTML = `
+              <div style="font-size: 14px; color: #aaa; margin-bottom: 5px;">${key}</div>
+              <div style="font-size: 20px; font-weight: bold;">${formattedValue}</div>
+            `;
+            container.appendChild(card);
+          }
+
+          document.getElementById("statistics-section").style.display = "block";
+        })
+        .catch(error => {
+          console.error("Error fetching statistics:", error);
+          document.getElementById("statistics-section").style.display = "none";
+        });
+    }
+  </script>
+</body>
+</html>

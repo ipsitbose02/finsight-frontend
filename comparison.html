@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Compare Stocks</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      background-color: #0e1117;
+      color: #e6e6e6;
+      font-family: 'Segoe UI', sans-serif;
+      padding: 30px;
+      margin: 0;
+    }
+
+    h1 {
+      text-align: center;
+      color: #00ffae;
+      margin-bottom: 20px;
+    }
+
+    .input-row {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    input {
+      padding: 8px;
+      border-radius: 5px;
+      border: none;
+      width: 100px;
+      background: #1c1f26;
+      color: white;
+    }
+
+    button {
+      padding: 10px 15px;
+      background-color: #00ffae;
+      color: #0e1117;
+      font-weight: bold;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    /* Grid styles */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 200px 1fr 1fr 1fr;
+      gap: 0;
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto 40px;
+      border: 1px solid #2c2f36;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .cell {
+      padding: 12px 15px;
+      border-bottom: 1px solid #2c2f36;
+      border-right: 1px solid #2c2f36;
+      background-color: #12151c;
+      word-wrap: break-word;
+      font-size: 14px;
+    }
+
+    .cell.metric {
+      background-color: #1c1f26;
+      font-weight: 600;
+      text-align: left;
+    }
+
+    .header-row .cell {
+      background-color: #1c1f26;
+      font-weight: 700;
+      text-align: center;
+      border-bottom: 2px solid #00ffae;
+      font-size: 16px;
+    }
+
+    .cell:last-child {
+      border-right: none;
+    }
+
+    /* Chart container spans columns 2-4 */
+    .charts-container {
+      grid-column: 2 / 5;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      padding: 15px;
+      background: #12151c;
+      border-top: 1px solid #2c2f36;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .chart-wrapper {
+      background: #1c1f26;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .chart-wrapper h3 {
+      margin: 0 0 8px 0;
+      font-weight: 600;
+      font-size: 16px;
+      color: #00ffae;
+    }
+
+    .chart-wrapper small {
+      display: block;
+      margin-top: 5px;
+      font-size: 12px;
+      color: #888;
+      font-style: italic;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 160px !important;
+      display: block;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .compare-grid {
+        grid-template-columns: 150px 1fr;
+      }
+      .charts-container {
+        grid-column: 1 / 3;
+        grid-template-columns: 1fr;
+      }
+      .chart-wrapper {
+        margin-bottom: 20px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>📊 Compare Stocks</h1>
+
+  <div class="input-row">
+    <input id="symbol1" placeholder="AAPL" />
+    <input id="symbol2" placeholder="MSFT" />
+    <input id="symbol3" placeholder="GOOGL" />
+    <button onclick="compareStocks()">Compare</button>
+  </div>
+
+  <div class="compare-grid" id="compareGrid">
+    <!-- Header row -->
+    <div class="cell header-row metric">Metric</div>
+    <div class="cell header-row" id="header1">AAPL</div>
+    <div class="cell header-row" id="header2">MSFT</div>
+    <div class="cell header-row" id="header3">GOOGL</div>
+    <!-- Data rows injected dynamically -->
+  </div>
+
+  <!-- Charts container -->
+  <div class="charts-container">
+    <div class="chart-wrapper">
+      <h3 id="chartTitle1">AAPL</h3>
+      <canvas id="chart1"></canvas>
+      <small>Past month price history</small>
+    </div>
+    <div class="chart-wrapper">
+      <h3 id="chartTitle2">MSFT</h3>
+      <canvas id="chart2"></canvas>
+      <small>Past month price history</small>
+    </div>
+    <div class="chart-wrapper">
+      <h3 id="chartTitle3">GOOGL</h3>
+      <canvas id="chart3"></canvas>
+      <small>Past month price history</small>
+    </div>
+  </div>
+
+  <script>
+    const chartInstances = {};
+
+    function formatValue(val) {
+      if (!val || val === "N/A" || val === "Data not available") return "N/A";
+      const num = parseFloat(val);
+      if (isNaN(num)) return val;
+      if (Math.abs(num) >= 1e12) return (num / 1e12).toFixed(2) + "T";
+      if (Math.abs(num) >= 1e9) return (num / 1e9).toFixed(2) + "B";
+      if (Math.abs(num) >= 1e6) return (num / 1e6).toFixed(2) + "M";
+      if (Math.abs(num) >= 1e3) return (num / 1e3).toFixed(2) + "K";
+      return num.toFixed(2);
+    }
+
+    function drawMiniChart(canvasId, history) {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      const labels = history.map(entry => entry.datetime);
+      const prices = history.map(entry => parseFloat(entry.close));
+
+      if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+      chartInstances[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Price',
+            data: prices,
+            fill: false,
+            borderColor: '#00ffae',
+            tension: 0.2,
+            pointRadius: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: { display: false },
+            y: { display: false }
+          }
+        }
+      });
+    }
+
+    function compareStocks() {
+      const s1 = document.getElementById('symbol1').value.toUpperCase() || "AAPL";
+      const s2 = document.getElementById('symbol2').value.toUpperCase() || "MSFT";
+      const s3 = document.getElementById('symbol3').value.toUpperCase() || "GOOGL";
+
+      // Update header & chart titles
+      document.getElementById('header1').innerText = s1;
+      document.getElementById('header2').innerText = s2;
+      document.getElementById('header3').innerText = s3;
+      document.getElementById('chartTitle1').innerText = s1;
+      document.getElementById('chartTitle2').innerText = s2;
+      document.getElementById('chartTitle3').innerText = s3;
+
+      fetch(`http://localhost:8080/api/stocks/compare?symbols=${s1},${s2},${s3}`)
+        .then(res => res.json())
+        .then(data => {
+          const metrics = new Set();
+          data.forEach(stock => Object.keys(stock).forEach(k => metrics.add(k)));
+          metrics.delete("symbol");
+
+          const grid = document.getElementById('compareGrid');
+          [...grid.querySelectorAll('.data-row')].forEach(e => e.remove());
+
+          metrics.forEach(metric => {
+            const r1 = data[0][metric] || "N/A";
+            const r2 = data[1][metric] || "N/A";
+            const r3 = data[2][metric] || "N/A";
+
+            // Skip row if ALL values are N/A
+            if ([r1, r2, r3].every(v => v === "N/A" || v === "Data not available")) return;
+
+            const metricDiv = document.createElement('div');
+            metricDiv.className = 'cell metric data-row';
+            metricDiv.innerText = metric;
+
+            const val1Div = document.createElement('div');
+            val1Div.className = 'cell data-row';
+            val1Div.innerText = formatValue(r1);
+
+            const val2Div = document.createElement('div');
+            val2Div.className = 'cell data-row';
+            val2Div.innerText = formatValue(r2);
+
+            const val3Div = document.createElement('div');
+            val3Div.className = 'cell data-row';
+            val3Div.innerText = formatValue(r3);
+
+            grid.appendChild(metricDiv);
+            grid.appendChild(val1Div);
+            grid.appendChild(val2Div);
+            grid.appendChild(val3Div);
+          });
+        });
+
+      // Draw mini charts
+      fetch(`http://localhost:8080/api/stocks/history/${s1}/1day/30`)
+        .then(r => r.json()).then(data => drawMiniChart("chart1", data));
+      fetch(`http://localhost:8080/api/stocks/history/${s2}/1day/30`)
+        .then(r => r.json()).then(data => drawMiniChart("chart2", data));
+      fetch(`http://localhost:8080/api/stocks/history/${s3}/1day/30`)
+        .then(r => r.json()).then(data => drawMiniChart("chart3", data));
+    }
+  </script>
+</body>
+</html>
